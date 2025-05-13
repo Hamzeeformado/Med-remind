@@ -11,131 +11,126 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
-import { getTodaysDietEntries, DietEntry } from "../../utils/health-storage";
+import {
+  getTodaysExerciseEntries,
+  getWeeklyExerciseProgress,
+  ExerciseEntry,
+} from "../../utils/health-storage";
 
-interface MealType {
+interface ExerciseType {
   id: string;
   label: string;
   icon:
-    | "restaurant-outline"
-    | "cafe-outline"
-    | "fast-food-outline"
-    | "nutrition-outline";
+    | "barbell-outline"
+    | "walk-outline"
+    | "bicycle-outline"
+    | "fitness-outline";
   color: string;
 }
 
-const MEAL_TYPES: MealType[] = [
+const EXERCISE_TYPES: ExerciseType[] = [
   {
-    id: "breakfast",
-    label: "Breakfast",
-    icon: "restaurant-outline",
+    id: "strength",
+    label: "Strength",
+    icon: "barbell-outline",
     color: "#FF6B6B",
   },
-  { id: "lunch", label: "Lunch", icon: "cafe-outline", color: "#4ECDC4" },
+  { id: "cardio", label: "Cardio", icon: "bicycle-outline", color: "#4ECDC4" },
+  { id: "walking", label: "Walking", icon: "walk-outline", color: "#45B7D1" },
   {
-    id: "dinner",
-    label: "Dinner",
-    icon: "fast-food-outline",
-    color: "#45B7D1",
-  },
-  {
-    id: "snacks",
-    label: "Snacks",
-    icon: "nutrition-outline",
+    id: "flexibility",
+    label: "Flexibility",
+    icon: "fitness-outline",
     color: "#96CEB4",
   },
 ];
 
-const DAILY_GOALS = {
-  calories: 2000,
-  protein: 150,
-  carbs: 250,
-  fat: 70,
+const WEEKLY_GOALS = {
+  strength: 3,
+  cardio: 4,
+  walking: 5,
+  flexibility: 3,
 };
 
-export default function DietScreen() {
+export default function ExerciseScreen() {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [meals, setMeals] = useState<DietEntry[]>([]);
-  const [nutritionSummary, setNutritionSummary] = useState({
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fat: 0,
+  const [workouts, setWorkouts] = useState<ExerciseEntry[]>([]);
+  const [weeklyProgress, setWeeklyProgress] = useState({
+    strength: 0,
+    cardio: 0,
+    walking: 0,
+    flexibility: 0,
   });
 
-  const loadMeals = useCallback(async () => {
+  const loadWorkouts = useCallback(async () => {
     try {
-      const todaysMeals = await getTodaysDietEntries();
-      setMeals(todaysMeals);
+      const todaysWorkouts = await getTodaysExerciseEntries();
+      setWorkouts(todaysWorkouts);
 
-      // Calculate nutrition summary
-      const summary = todaysMeals.reduce(
-        (acc, meal) => ({
-          calories: acc.calories + meal.totalCalories,
-          protein: acc.protein + meal.totalProtein,
-          carbs: acc.carbs + meal.totalCarbs,
-          fat: acc.fat + meal.totalFat,
-        }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
-      );
-      setNutritionSummary(summary);
+      const progress = await getWeeklyExerciseProgress();
+      setWeeklyProgress(progress);
     } catch (error) {
-      console.error("Error loading meals:", error);
+      console.error("Error loading workouts:", error);
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadMeals();
-    }, [loadMeals])
+      loadWorkouts();
+    }, [loadWorkouts])
   );
 
-  const renderMealSection = (mealType: MealType) => {
-    const typeMeals = meals.filter((m) => m.mealType === mealType.id);
+  const renderWorkoutSection = (exerciseType: ExerciseType) => {
+    const typeWorkouts = workouts.filter((w) => w.type === exerciseType.id);
     return (
       <TouchableOpacity
-        key={mealType.id}
-        style={styles.mealCard}
-        onPress={() => router.push("/diet/add" as any)}
+        key={exerciseType.id}
+        style={styles.workoutCard}
+        onPress={() => router.push("/exercise/add" as any)}
       >
-        <View style={styles.mealHeader}>
+        <View style={styles.workoutHeader}>
           <View
-            style={[styles.iconContainer, { backgroundColor: mealType.color }]}
+            style={[
+              styles.iconContainer,
+              { backgroundColor: exerciseType.color },
+            ]}
           >
-            <Ionicons name={mealType.icon} size={24} color="white" />
+            <Ionicons name={exerciseType.icon} size={24} color="white" />
           </View>
-          <View style={styles.mealInfo}>
-            <Text style={styles.mealTitle}>{mealType.label}</Text>
-            <Text style={styles.mealProgress}>
-              {typeMeals.length} entries today
+          <View style={styles.workoutInfo}>
+            <Text style={styles.workoutTitle}>{exerciseType.label}</Text>
+            <Text style={styles.workoutProgress}>
+              {typeWorkouts.length} entries today
             </Text>
           </View>
         </View>
-        {typeMeals.length > 0 ? (
-          <View style={styles.mealContent}>
-            {typeMeals.map((meal) => (
-              <View key={meal.id} style={styles.mealItem}>
-                <Text style={styles.mealTime}>
-                  {new Date(meal.date).toLocaleTimeString([], {
+        {typeWorkouts.length > 0 ? (
+          <View style={styles.workoutContent}>
+            {typeWorkouts.map((workout) => (
+              <View key={workout.id} style={styles.workoutItem}>
+                <Text style={styles.workoutTime}>
+                  {new Date(workout.date).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
                 </Text>
-                <Text style={styles.mealDetails}>
-                  {meal.foods.length} items • {meal.totalCalories} cal
+                <Text style={styles.workoutDetails}>
+                  {workout.exercises.length} exercises • {workout.duration} min
                 </Text>
               </View>
             ))}
           </View>
         ) : (
-          <Text style={styles.addMealText}>Tap to add {mealType.label}</Text>
+          <Text style={styles.addWorkoutText}>
+            Tap to add {exerciseType.label}
+          </Text>
         )}
       </TouchableOpacity>
     );
   };
 
-  const renderNutritionProgress = (
+  const renderProgressBar = (
     label: string,
     value: number,
     goal: number,
@@ -179,47 +174,47 @@ export default function DietScreen() {
           >
             <Ionicons name="chevron-back" size={28} color="#1a8e2d" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Diet Tracker</Text>
+          <Text style={styles.headerTitle}>Exercise Tracker</Text>
         </View>
 
         <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>Today's Nutrition</Text>
-          {renderNutritionProgress(
-            "Calories",
-            nutritionSummary.calories,
-            DAILY_GOALS.calories,
+          <Text style={styles.summaryTitle}>Weekly Progress</Text>
+          {renderProgressBar(
+            "Strength",
+            weeklyProgress.strength,
+            WEEKLY_GOALS.strength,
             "#FF6B6B"
           )}
-          {renderNutritionProgress(
-            "Protein",
-            nutritionSummary.protein,
-            DAILY_GOALS.protein,
+          {renderProgressBar(
+            "Cardio",
+            weeklyProgress.cardio,
+            WEEKLY_GOALS.cardio,
             "#4ECDC4"
           )}
-          {renderNutritionProgress(
-            "Carbs",
-            nutritionSummary.carbs,
-            DAILY_GOALS.carbs,
+          {renderProgressBar(
+            "Walking",
+            weeklyProgress.walking,
+            WEEKLY_GOALS.walking,
             "#45B7D1"
           )}
-          {renderNutritionProgress(
-            "Fat",
-            nutritionSummary.fat,
-            DAILY_GOALS.fat,
+          {renderProgressBar(
+            "Flexibility",
+            weeklyProgress.flexibility,
+            WEEKLY_GOALS.flexibility,
             "#96CEB4"
           )}
         </View>
 
-        <ScrollView style={styles.mealsContainer}>
-          {MEAL_TYPES.map(renderMealSection)}
+        <ScrollView style={styles.workoutsContainer}>
+          {EXERCISE_TYPES.map(renderWorkoutSection)}
         </ScrollView>
 
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push("/diet/add" as any)}
+          onPress={() => router.push("/exercise/add" as any)}
         >
           <Ionicons name="add" size={24} color="white" />
-          <Text style={styles.addButtonText}>Add Meal</Text>
+          <Text style={styles.addButtonText}>Add Workout</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -300,10 +295,10 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
   },
-  mealsContainer: {
+  workoutsContainer: {
     flex: 1,
   },
-  mealCard: {
+  workoutCard: {
     backgroundColor: "white",
     borderRadius: 15,
     padding: 15,
@@ -314,7 +309,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  mealHeader: {
+  workoutHeader: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 10,
@@ -327,36 +322,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 10,
   },
-  mealInfo: {
+  workoutInfo: {
     flex: 1,
   },
-  mealTitle: {
+  workoutTitle: {
     fontSize: 16,
     fontWeight: "bold",
     color: "#333",
   },
-  mealProgress: {
+  workoutProgress: {
     fontSize: 12,
     color: "#666",
     marginTop: 2,
   },
-  mealContent: {
+  workoutContent: {
     marginLeft: 50,
   },
-  mealItem: {
+  workoutItem: {
     marginBottom: 10,
   },
-  mealTime: {
+  workoutTime: {
     fontSize: 14,
     fontWeight: "600",
     color: "#333",
   },
-  mealDetails: {
+  workoutDetails: {
     fontSize: 12,
     color: "#666",
     marginTop: 2,
   },
-  addMealText: {
+  addWorkoutText: {
     fontSize: 14,
     color: "#888",
     fontStyle: "italic",

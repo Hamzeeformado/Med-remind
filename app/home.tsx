@@ -22,6 +22,12 @@ import {
   recordDose,
   DoseHistory,
 } from "../utils/storage";
+import {
+  getTodaysDietEntries,
+  getTodaysExerciseEntries,
+  DietEntry,
+  ExerciseEntry,
+} from "../utils/health-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   registerForPushNotificationsAsync,
@@ -66,15 +72,15 @@ const QUICK_ACTIONS = [
     icon: "fast-food" as const,
     label: "Diet",
     route: "/diet" as const,
-    color: "#E64A19",
-    gradient: ["#FF5722", "#E64A19"] as [string, string],
+    color: "#8E24AA",
+    gradient: ["#9C27B0", "#8E24AA"] as [string, string],
   },
   {
     icon: "logo-ionic" as const,
     label: "Exercise",
-    route: "/excercise" as const,
-    color: "#E64A19",
-    gradient: ["#FF5722", "#E64A19"] as [string, string],
+    route: "/exercise" as const,
+    color: "#00796B",
+    gradient: ["#009688", "#00796B"] as [string, string],
   },
 ];
 
@@ -151,16 +157,25 @@ export default function HomeScreen() {
   const [todaysMedications, setTodaysMedications] = useState<Medication[]>([]);
   const [completedDoses, setCompletedDoses] = useState(0);
   const [doseHistory, setDoseHistory] = useState<DoseHistory[]>([]);
+  const [todaysDietEntries, setTodaysDietEntries] = useState<DietEntry[]>([]);
+  const [todaysExerciseEntries, setTodaysExerciseEntries] = useState<
+    ExerciseEntry[]
+  >([]);
 
-  const loadMedications = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const [allMedications, todaysDoses] = await Promise.all([
-        getMedications(),
-        getTodaysDoses(),
-      ]);
+      const [allMedications, todaysDoses, dietEntries, exerciseEntries] =
+        await Promise.all([
+          getMedications(),
+          getTodaysDoses(),
+          getTodaysDietEntries(),
+          getTodaysExerciseEntries(),
+        ]);
 
       setDoseHistory(todaysDoses);
       setMedications(allMedications);
+      setTodaysDietEntries(dietEntries);
+      setTodaysExerciseEntries(exerciseEntries);
 
       // Filter medications for today
       const today = new Date();
@@ -188,7 +203,7 @@ export default function HomeScreen() {
       const completed = todaysDoses.filter((dose) => dose.taken).length;
       setCompletedDoses(completed);
     } catch (error) {
-      console.error("Error loading medications:", error);
+      console.error("Error loading data:", error);
     }
   }, []);
 
@@ -214,13 +229,13 @@ export default function HomeScreen() {
 
   // Use useEffect for initial load
   useEffect(() => {
-    loadMedications();
+    loadData();
     setupNotifications();
 
     // Handle app state changes for notifications
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
-        loadMedications();
+        loadData();
       }
     });
 
@@ -236,15 +251,15 @@ export default function HomeScreen() {
         // Cleanup if needed
       };
 
-      loadMedications();
+      loadData();
       return () => unsubscribe();
-    }, [loadMedications])
+    }, [loadData])
   );
 
   const handleTakeDose = async (medication: Medication) => {
     try {
       await recordDose(medication.id, true, new Date().toISOString());
-      await loadMedications(); // Reload data after recording dose
+      await loadData(); // Reload data after recording dose
     } catch (error) {
       console.error("Error recording dose:", error);
       Alert.alert("Error", "Failed to record dose. Please try again.");
@@ -261,6 +276,116 @@ export default function HomeScreen() {
     todaysMedications.length > 0
       ? completedDoses / (todaysMedications.length * 2)
       : 0;
+
+  const renderScheduleItem = (item: Medication | DietEntry | ExerciseEntry) => {
+    if ("dosage" in item) {
+      // Medication
+      const medication = item as Medication;
+      const taken = isDoseTaken(medication.id);
+      return (
+        <View key={medication.id} style={styles.doseCard}>
+          <View
+            style={[
+              styles.doseBadge,
+              { backgroundColor: `${medication.color}15` },
+            ]}
+          >
+            <Ionicons name="medical" size={24} color={medication.color} />
+          </View>
+          <View style={styles.doseInfo}>
+            <View>
+              <Text style={styles.medicineName}>{medication.name}</Text>
+              <Text style={styles.dosageInfo}>{medication.dosage}</Text>
+            </View>
+            <View style={styles.doseTime}>
+              <Ionicons name="time-outline" size={16} color="#666" />
+              <Text style={styles.timeText}>{medication.times[0]}</Text>
+            </View>
+          </View>
+          {taken ? (
+            <View style={[styles.takenBadge]}>
+              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+              <Text style={styles.takenText}>Taken</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.takeDoseButton,
+                { backgroundColor: medication.color },
+              ]}
+              onPress={() => handleTakeDose(medication)}
+            >
+              <Text style={styles.takeDoseText}>Take</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    } else if ("mealType" in item) {
+      // Diet Entry
+      const dietEntry = item as DietEntry;
+      return (
+        <View key={dietEntry.id} style={styles.doseCard}>
+          <View style={[styles.doseBadge, { backgroundColor: "#8E24AA15" }]}>
+            <Ionicons name="fast-food" size={24} color="#8E24AA" />
+          </View>
+          <View style={styles.doseInfo}>
+            <View>
+              <Text style={styles.medicineName}>{dietEntry.mealType}</Text>
+              <Text style={styles.dosageInfo}>
+                {dietEntry.foods.map((food) => food.name).join(", ")}
+              </Text>
+            </View>
+            <View style={styles.doseTime}>
+              <Ionicons name="time-outline" size={16} color="#666" />
+              <Text style={styles.timeText}>
+                {new Date(dietEntry.date).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </View>
+          </View>
+        </View>
+      );
+    } else {
+      // Exercise Entry
+      const exerciseEntry = item as ExerciseEntry;
+      return (
+        <View key={exerciseEntry.id} style={styles.doseCard}>
+          <View style={[styles.doseBadge, { backgroundColor: "#00796B15" }]}>
+            <Ionicons name="fitness" size={24} color="#00796B" />
+          </View>
+          <View style={styles.doseInfo}>
+            <View>
+              <Text style={styles.medicineName}>{exerciseEntry.type}</Text>
+              <Text style={styles.dosageInfo}>
+                {exerciseEntry.exercises.map((ex) => ex.name).join(", ")}
+              </Text>
+            </View>
+            <View style={styles.doseTime}>
+              <Ionicons name="time-outline" size={16} color="#666" />
+              <Text style={styles.timeText}>
+                {new Date(exerciseEntry.date).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </View>
+          </View>
+        </View>
+      );
+    }
+  };
+
+  const allScheduleItems = [
+    ...todaysMedications,
+    ...todaysDietEntries,
+    ...todaysExerciseEntries,
+  ].sort((a, b) => {
+    const dateA = "times" in a ? new Date(a.times[0]) : new Date(a.date);
+    const dateB = "times" in b ? new Date(b.times[0]) : new Date(b.date);
+    return dateA.getTime() - dateB.getTime();
+  });
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -325,70 +450,38 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </Link>
           </View>
-          {todaysMedications.length === 0 ? (
+          {allScheduleItems.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="medical-outline" size={48} color="#ccc" />
+              <Ionicons name="calendar-outline" size={48} color="#ccc" />
               <Text style={styles.emptyStateText}>
-                No medications scheduled for today
+                No activities scheduled for today
               </Text>
-              <Link href="/medications/add" asChild>
-                <TouchableOpacity style={styles.addMedicationButton}>
-                  <Text style={styles.addMedicationButtonText}>
-                    Add Medication
-                  </Text>
-                </TouchableOpacity>
-              </Link>
+              <View style={styles.emptyStateButtons}>
+                <Link href="/medications/add" asChild>
+                  <TouchableOpacity
+                    style={[styles.addButton, { backgroundColor: "#1a8e2d" }]}
+                  >
+                    <Text style={styles.addButtonText}>Add Medication</Text>
+                  </TouchableOpacity>
+                </Link>
+                <Link href="/diet/add" asChild>
+                  <TouchableOpacity
+                    style={[styles.addButton, { backgroundColor: "#8E24AA" }]}
+                  >
+                    <Text style={styles.addButtonText}>Add Meal</Text>
+                  </TouchableOpacity>
+                </Link>
+                <Link href="/exercise/add" asChild>
+                  <TouchableOpacity
+                    style={[styles.addButton, { backgroundColor: "#00796B" }]}
+                  >
+                    <Text style={styles.addButtonText}>Add Workout</Text>
+                  </TouchableOpacity>
+                </Link>
+              </View>
             </View>
           ) : (
-            todaysMedications.map((medication) => {
-              const taken = isDoseTaken(medication.id);
-              return (
-                <View key={medication.id} style={styles.doseCard}>
-                  <View
-                    style={[
-                      styles.doseBadge,
-                      { backgroundColor: `${medication.color}15` },
-                    ]}
-                  >
-                    <Ionicons
-                      name="medical"
-                      size={24}
-                      color={medication.color}
-                    />
-                  </View>
-                  <View style={styles.doseInfo}>
-                    <View>
-                      <Text style={styles.medicineName}>{medication.name}</Text>
-                      <Text style={styles.dosageInfo}>{medication.dosage}</Text>
-                    </View>
-                    <View style={styles.doseTime}>
-                      <Ionicons name="time-outline" size={16} color="#666" />
-                      <Text style={styles.timeText}>{medication.times[0]}</Text>
-                    </View>
-                  </View>
-                  {taken ? (
-                    <View style={[styles.takenBadge]}>
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={20}
-                        color="#4CAF50"
-                      />
-                      <Text style={styles.takenText}>Taken</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={[
-                        styles.takeDoseButton,
-                        { backgroundColor: medication.color },
-                      ]}
-                      onPress={() => handleTakeDose(medication)}
-                    >
-                      <Text style={styles.takeDoseText}>Take</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })
+            allScheduleItems.map(renderScheduleItem)
           )}
         </View>
       </View>
@@ -710,15 +803,22 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 20,
   },
-  addMedicationButton: {
-    backgroundColor: "#1a8e2d",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+  emptyStateButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
   },
-  addMedicationButtonText: {
+  addButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginHorizontal: 5,
+  },
+  addButtonText: {
     color: "white",
     fontWeight: "600",
+    fontSize: 14,
   },
   takenBadge: {
     flexDirection: "row",
